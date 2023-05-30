@@ -1,6 +1,7 @@
 import os
 import pymongo
 import json
+import time
 from bson.timestamp import Timestamp
 
 
@@ -19,6 +20,7 @@ def change_stream():
     client = pymongo.MongoClient(os.environ['CHANGE_STREAM_DB'])
     aggregate = "{'$project':{'$operationType':1'}}";
 
+    '''
     streams = client.test.watch()
     for change in streams:
         fichier = open("journal_change.log", "a")
@@ -36,6 +38,22 @@ def change_stream():
         fichier.write(str(operation))
         fichier.write("\n")
         fichier.close()
+    '''
+    #
+    with client.test.collection.watch() as stream:
+        while stream.alive:
+            change = stream.try_next()
+            # Note that the ChangeStream's resume token may be updated
+            # even when no changes are returned.
+            print("Current resume token: %r" % (stream.resume_token,))
+            if change is not None:
+                print("Change document: %r" % (change,))
+                continue
+            # We end up here when there are no recent changes.
+            # Sleep for a while before trying again to avoid flooding
+            # the server with getMore requests when no changes are
+            # available.
+            time.sleep(10)
 
 
 if __name__ == '__main__':
